@@ -46,7 +46,7 @@ class communicator():
                     if resp.content.at_eof(): # End of line, job done
                         self.responseTimes.append(time.time() - startTime)
                         self.currentJobTime = time.time() - startTime
-                        self.log.info(f"Job done! Took {self.currentJobTime} ms")
+                        logging.info(f"Job done! Took {self.currentJobTime} ms")
 
                         if len(self.responseTimes) > 10:
                             self.responseTimes.pop(0)

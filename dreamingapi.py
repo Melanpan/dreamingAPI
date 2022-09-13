@@ -23,7 +23,9 @@ from fastapi.responses import StreamingResponse, PlainTextResponse, HTMLResponse
 class EndpointFilter(logging.Filter):
     """ This makes it easier to filter some endpoints out of the logs """
     def filter(self, record: logging.LogRecord) -> bool:
-        return record.getMessage().find("/telegraf") == -1
+        if record.getMessage().find("/telegraf"):
+            return record.getMessage().find("/telegraf") == -1
+        return True
 
 logging.config.fileConfig('logging.conf', disable_existing_loggers=False)
 logging.getLogger("uvicorn.access").addFilter(EndpointFilter())

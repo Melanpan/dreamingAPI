@@ -31,7 +31,7 @@ class backgroundWorkerClass():
             info = subprocess.check_output(["/usr/bin/nvidia-smi", "-x", "-q"], stderr=subprocess.STDOUT)
             return xmltodict.parse(info.decode("utf8"))
         except Exception as e:
-            logging.error(f"Failed to xecute nvidia-smi! ({e})")
+            logging.error(f"Failed to execute nvidia-smi! ({e})")
             return f"Executing nvidia-smi failed: {e}"
 
     async def jobprocessRespline(self, respLine, job):
@@ -63,8 +63,8 @@ class backgroundWorkerClass():
         await self.redis.setex("dreaming-working", 
             job['uuid'], settings.redisKeys.working_exp)
         
-        request_parameters = copy.deepcopy(job)
         # Remove parameters that we don't need
+        request_parameters = copy.deepcopy(job)
         for parameter in ['event', 'uuid', 'initiator', 'timestamp']:
             request_parameters.pop(parameter)
         
@@ -121,7 +121,7 @@ class backgroundWorkerClass():
                 except Exception as e:
                     import traceback
                     traceback.print_exc()
-                    self.log.error(f"An exception occured in the background thread! {e}")
+                    logging.error(f"An exception occured in the background thread! {e}")
                     capture_exception(e)
 
             await asyncio.sleep(0.100)
