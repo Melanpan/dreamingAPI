@@ -48,3 +48,4 @@ dist/**
 *.i18n.json
 .env
 run.sh
+sync.sh
