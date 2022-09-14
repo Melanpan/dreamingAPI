@@ -1,17 +1,17 @@
-import asyncio
 import json
+import os
+import copy
 import logging
+import asyncio
 import subprocess
 import xmltodict
-import copy
-import os
 import api.skinDetector as skinDetector
-from config import settings
+
 from sentry_sdk import capture_exception
+from config import settings
 
 # TODO proper error detection
-# TODO ability to cancel
-# TODO set paths in env
+# TODO set paths in config
 
 class backgroundWorkerClass():
     smi = None
@@ -84,12 +84,11 @@ class backgroundWorkerClass():
                 job['event'] = "cancelled"
                 await self.client.cancelJob()
 
-
         job['event'] = "done"
         job['raw'] = promptBuffer
         job['result'] = results
         
-        if self.jobCanceled or not "result" in job['result']:
+        if self.jobCanceled or not "url" in job['result']:
             logging.warn(f"Job failed or canceled: {job['prompt']} ({job['uuid']})")
             job['event'] = "canceled"
 
