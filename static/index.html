@@ -37,6 +37,8 @@
 	    <option value="k_euler_a">KEULER_A</option>
             <option value="k_heun">KHEUN</option>
           </select>
+	  <input type="checkbox" name="seamless" id="seamless">	
+	  <label for="seamless">Seamless circular tiling</label>
           <br>
           <label title="Set to multiple of 64" for="width">Width:</label>
           <select id="width" name="width" value="512">
@@ -63,6 +65,13 @@
           <label title="Set to -1 for random seed" for="seed">Seed:</label>
           <input value="-1" type="number" id="seed" name="seed">
           <button type="button" id="reset-seed">&olarr;</button>
+          <br>
+	  <div id="variations">
+            <label title="If > 0, generates variations on the initial seed instead of random seeds per iteration. Must be between 0 and 1. Higher values will be more different." for="variation_amount">Variation amount (0 to disable):</label>
+            <input value="0" type="number" id="variation_amount" name="variation_amount" step="0.01" min="0" max="1">
+            <label title="list of variations to apply, in the format `seed:weight,seed:weight,..." for="with_variations">With variations (seed:weight,seed:weight,...):</label>
+            <input value="" type="text" id="with_variations" name="with_variations">
+          </div>
           <br>
           <label for="strength">Img2Img Strength:</label>
           <input value="0.75" type="number" id="strength" name="strength" step="0.01" min="0" max="1">
