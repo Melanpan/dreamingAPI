@@ -15,10 +15,15 @@ class communicator():
     async def init(self):
         self.client = aiohttp.ClientSession()
 
-    async def request(self, prompt, sampler_name ="k_lms", width=512, height=512, initimg=None, 
-                      cfg_scale=7, steps=50, iterations=1, seed=-1, strength=0.75, variation_amount=0,
-                      seamless=False, with_variations="", gfpgan_strength=0.8, upscale_level=2, 
-                      upscale_strength=0.75, fit="on"):
+    async def cancelJob(self):
+        async with self.client.get(settings.sd_url + "cancel") as resp:
+            if resp.status == 200:
+                return await resp.read()
+
+    async def generate(self, prompt, sampler_name ="k_lms", width=512, height=512, initimg=None, 
+                      cfg_scale=7, steps=50, iterations=1, seed=-1, strength=0.75, variation_amount=0, 
+                      seamless=False, gfpgan_strength=0.8, upscale_level=2, upscale_strength=0.75, 
+                      fit="on", with_variations="", progress_images=False):
         
         options = locals()
         options.pop("self")
@@ -30,9 +35,14 @@ class communicator():
         if int(options['iterations']) > settings.stableDiffusion.max_itterations:
             options['iterations'] = settings.stableDiffusion.max_itterations
 
+        #if (not options['with_variations']):
+            # no variations picked, unset variation_amount , remove with_variations from options
+            # options['variation_amount'] = 0
+            # options.pop('with_variations')
+
         if options['seamless'] == False:
             options.pop('seamless')
-                    
+
         if options['seed'] == "":
             options['seed'] = "-1"
                 

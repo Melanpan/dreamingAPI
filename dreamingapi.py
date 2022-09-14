@@ -20,15 +20,8 @@ from fastapi import FastAPI, HTTPException, Response, Request, Form
 from fastapi.responses import StreamingResponse, PlainTextResponse, HTMLResponse
 
 # Setup logging
-class EndpointFilter(logging.Filter):
-    """ This makes it easier to filter some endpoints out of the logs """
-    def filter(self, record: logging.LogRecord) -> bool:
-        if record.getMessage().find("/telegraf"):
-            return record.getMessage().find("/telegraf") == -1
-        return True
-
 logging.config.fileConfig('logging.conf', disable_existing_loggers=False)
-logging.getLogger("uvicorn.access").addFilter(EndpointFilter())
+logging.getLogger("uvicorn.access").setLevel(logging.WARN)
 logger = logging.getLogger(__name__)
 coloredlogs.install(level='INFO', logger=logger)
 
@@ -49,17 +42,17 @@ app.add_middleware( CORSMiddleware, allow_origins=["*"],
         allow_headers=["*"])
 
 async def getJobPos(uuid:str) -> dict:
-    """ Return the job posssion of uid, as well as the total items 
+    """ Return the job position of uid, as well as the total items
         in the queue and if we are currently working on something. """
     matchingJobPos = -1
     pos = 0
     queue = [json.loads(job) for job in await redis.lrange("sd-queue")]
-    
+
     for job in reversed(queue):
         if job['uuid'] == uuid:
             matchingJobPos = pos
         pos += 1
-    
+
     if len(queue) >= 1:
         return {"pos": matchingJobPos + 1, "total": len(queue) + 1, "working": background.working}
     return {"pos": 0, "total": 0, "working": background.working}
@@ -75,7 +68,7 @@ async def interfaceStreamer(uuid):
         if not job:
             yield json.dumps({"event": "error", "message": f"Failed to find uuid {uuid}"}) + "\n"
             return
-    
+
         # Add GPU info to the output
         job.update({"jobpos": await getJobPos(uuid),
             "gpu": {
@@ -87,13 +80,17 @@ async def interfaceStreamer(uuid):
                     "rx_util": background.smi['nvidia_smi_log']['gpu']['pci']['rx_util'],
                 }
             }})
-
+        
         if "initimg" in job:
             job.pop("initimg") # Don't send back base64 data to the client
-    
+
+        if job['event'] == "canceled": 
+            yield json.dumps(job) + "\n"
+            break
+
         if job['event'] == "done": 
             # Make the response into something how
-            # the web interfaace wants it
+            # the web interface wants it
             job['event'] = "result"
             job.update(job['result'])
             job.pop('result') # Remove result and raw, the client does not like a lot of data at once
@@ -103,6 +100,7 @@ async def interfaceStreamer(uuid):
         else:
             if job['event'] == "generating":
                 job['event'] = "step"
+            
             yield json.dumps(job) + "\n"
         await asyncio.sleep(1.00)
 
@@ -152,6 +150,20 @@ async def get_job(uuid: str):
         return job
     raise HTTPException(status_code=404, detail="UUID not found")
 
+@app.get("/job/cancel")
+async def get_job(uuid: str):
+    """ Returns the job straight from Redis """
+    
+    if job := await redis.get(f"dreaming-job-{uuid}"):
+        if background.workingUuid == uuid:
+            background.jobCanceled = True
+        else:
+            await redis.delete(f"dreaming-job-{uuid}")
+        return {"status": f"OK"}
+    
+    raise HTTPException(status_code=404, detail="UUID not found")
+
+
 @app.get("/job/delete")
 async def delete_job(uuid: str):
     """ Remove a job from the queue"""
@@ -171,7 +183,7 @@ async def list_jobs():
     """ Return some status information """
     return {"status": await redis.get("dreaming-status"), 
             "working": await redis.get("dreaming-working"),
-            "responseTime": calculateResponseTimes()}
+            "nvidia": background.smi, "queuesize": len(await redis.lrange('sd-queue'))}
 
 @app.get("/gpu") #TODO change path
 async def gpu_info():
@@ -210,6 +222,13 @@ async def job_image(uuid: str, jpeg: bool | None = False):
     
     return {"error": f"Couldn't find a job with uuid {uuid}"} #change to 404
 
+#TODO code me better
+@app.get("/job/image/intermediates")
+async def job_image_inter(image):
+    imagePath = os.path.join("/home/nurds/stable-diffusion/outputs/img-samples/intermediates/", image)
+    with open(imagePath, "rb") as f:
+            return Response(f.read(), media_type="Image/PNG")
+
 @app.get("/job/jpg")
 async def job_image(uuid: str):
     # For the time being, we can only handle single files
@@ -224,9 +243,15 @@ async def job_image(uuid: str):
         
         return Response(imageAsJpeg(imagePath).read(), media_type="Image/Jpeg")
 
+def parseStringToBool(input: str) -> bool:
+    if input == 'on':
+        return True
+    return False
+
 @app.post("/dream")
 async def do_dream(request: Request):
-    job = await request.json() 
+    job = await request.json()
+    
     jobuuid = str(uuid.uuid1())
     
     job.update({"uuid": jobuuid, "initiator": "api", "event": "queued", "timestamp": time.time()})
@@ -273,6 +298,11 @@ async def dreamStreaming(request: Request):
     
     job = await request.json() # Web interface sends parameters as json
     job.update({"uuid": str(uuid.uuid1()), "initiator": "web", "event": "queued", "timestamp": time.time()})
+    job.pop("initimg_name")
+
+    job['fit'] = parseStringToBool(job['fit'])
+    if "progress_images" in job:
+        job['progress_images'] = parseStringToBool(job['progress_images'])
 
     await redis.setex(f"dreaming-job-{job['uuid']}", job, 12000)
     await redis.lpush("sd-queue", job)

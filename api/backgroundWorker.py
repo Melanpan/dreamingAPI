@@ -17,6 +17,7 @@ class backgroundWorkerClass():
     smi = None
     working = False
     workingUuid = None
+    jobCanceled = False
 
     def __init__(self, redis, client) -> None:
         self.redis = redis
@@ -48,6 +49,10 @@ class backgroundWorkerClass():
             job['event'] = respLine['event']
             job['step'] = 0
 
+        if "progress_images" in job and job['progress_images'] \
+            and "url" in respLine and respLine['url'] != None:
+            job['url'] = os.path.basename(respLine['url'])
+
         await self.redis.setex(f"dreaming-job-{job['uuid']}", 
             job, settings.redisKeys.job_exp)
         return job
@@ -63,28 +68,40 @@ class backgroundWorkerClass():
         await self.redis.setex("dreaming-working", 
             job['uuid'], settings.redisKeys.working_exp)
         
-        # Remove parameters that arent needed
+        # Remove parameters that we don't need
         request_parameters = copy.deepcopy(job)
         for parameter in ['event', 'uuid', 'initiator', 'timestamp']:
             request_parameters.pop(parameter)
         
-        async for respLine in self.client.request(**request_parameters):
+        async for respLine in self.client.generate(**request_parameters):
             promptBuffer.append(respLine)
             job = await self.jobprocessRespline(respLine, job)
              
             if "event" in respLine and respLine['event'] == "result":
                 results = respLine
-        
+            
+            if self.jobCanceled:
+                job['event'] = "cancelled"
+                await self.client.cancelJob()
+
+
         job['event'] = "done"
         job['raw'] = promptBuffer
         job['result'] = results
         
+        if self.jobCanceled or not "result" in job['result']:
+            logging.warn(f"Job failed or canceled: {job['prompt']} ({job['uuid']})")
+            job['event'] = "canceled"
+
         await self.redis.setex(f"dreaming-job-{job['uuid']}", job, 3000) # Job result will expire in a hour
         
         # Set back to default
         await self.redis.delete("dreaming-working")
         await self.redis.set("dreaming-status", {"status": "Awaiting prompts."})
         
+        if not "result" in job['result']:
+            return
+
         # detect skin if enabled
         skinAmount = 0
         if settings.reporting.calculate_skin == True:
@@ -100,8 +117,6 @@ class backgroundWorkerClass():
         await self.redis.set("sd-stats", json.dumps(statsJson))
 
         logging.info(f"Finished working on: {job['prompt']} ({job['uuid']})")
-        self.working = False
-        self.workingUuid = None
 
     async def nvidiaSmiTask(self):
         logging.info("Starting nvidia-smi background task")
@@ -123,5 +138,9 @@ class backgroundWorkerClass():
                     traceback.print_exc()
                     logging.error(f"An exception occured in the background thread! {e}")
                     capture_exception(e)
+                finally:
+                    self.working = False
+                    self.workingUuid = ""
+                    self.jobCanceled = False
 
             await asyncio.sleep(0.100)
