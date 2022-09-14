@@ -35,7 +35,7 @@ class backgroundWorkerClass():
             return f"Executing nvidia-smi failed: {e}"
 
     async def jobprocessRespline(self, respLine, job):
-        """ Process a line as return by lstein's Stable Diffusion api"""
+        """ Process a line as returned by lstein's Stable Diffusion api"""
         await self.redis.setex("dreaming-status", {"uuid": job['uuid'], "status": respLine}, 
                                 settings.redisKeys.working_exp)
 
@@ -63,7 +63,7 @@ class backgroundWorkerClass():
         await self.redis.setex("dreaming-working", 
             job['uuid'], settings.redisKeys.working_exp)
         
-        # Remove parameters that we don't need
+        # Remove parameters that arent needed
         request_parameters = copy.deepcopy(job)
         for parameter in ['event', 'uuid', 'initiator', 'timestamp']:
             request_parameters.pop(parameter)
