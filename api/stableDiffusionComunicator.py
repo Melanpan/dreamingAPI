@@ -16,8 +16,9 @@ class communicator():
         self.client = aiohttp.ClientSession()
 
     async def request(self, prompt, sampler_name ="k_lms", width=512, height=512, initimg=None, 
-                      cfg_scale=7, steps=50, iterations=1, seed=-1, strength=0.75,
-                      gfpgan_strength=0.8, upscale_level=2, upscale_strength=0.75, fit="on"):
+                      cfg_scale=7, steps=50, iterations=1, seed=-1, strength=0.75, variation_amount=0,
+                      seamless=False, with_variations="", gfpgan_strength=0.8, upscale_level=2, 
+                      upscale_strength=0.75, fit="on"):
         
         options = locals()
         options.pop("self")
@@ -29,6 +30,9 @@ class communicator():
         if int(options['iterations']) > settings.stableDiffusion.max_itterations:
             options['iterations'] = settings.stableDiffusion.max_itterations
 
+        if options['seamless'] == False:
+            options.pop('seamless')
+                    
         if options['seed'] == "":
             options['seed'] = "-1"
                 
